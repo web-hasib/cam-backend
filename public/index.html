@@ -332,6 +332,66 @@
       0%, 100% { opacity: 0.3; transform: scale(0.9); }
       50% { opacity: 1; transform: scale(1.1); }
     }
+
+    /* ─── Exit Screen Modal ──────────────────────────────── */
+    .exit-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      background: radial-gradient(circle at center, rgba(11, 17, 32, 0.98) 0%, rgba(3, 7, 18, 0.99) 100%);
+      z-index: 200;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      backdrop-filter: blur(20px);
+    }
+    .exit-screen.active {
+      display: flex;
+    }
+    .exit-card {
+      max-width: 340px;
+      width: 100%;
+      padding: 36px 24px;
+      border-radius: 30px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .exit-icon-box {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: rgba(225, 29, 72, 0.15);
+      border: 1px solid rgba(244, 63, 94, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 18px;
+      box-shadow: 0 0 28px rgba(225, 29, 72, 0.35);
+    }
+    .btn-rejoin {
+      background: linear-gradient(135deg, #0284c7, #0369a1);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: #fff;
+      padding: 13px 26px;
+      border-radius: 9999px;
+      font-weight: 700;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(2, 132, 199, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.4);
+      transition: transform 0.12s;
+    }
+    .btn-rejoin:active {
+      transform: scale(0.94);
+    }
   </style>
 </head>
 <body>
@@ -452,6 +512,27 @@
     <div style="font-size: 12px; margin-top: 6px; color: #64748b;">Screen power saved • Tap anywhere to wake</div>
   </div>
 
+  <!-- Exit / Disconnected Screen -->
+  <div class="exit-screen" id="exitScreen">
+    <div class="exit-card liquid-glass">
+      <div class="exit-icon-box">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#f43f5e" stroke-width="2">
+          <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+          <line x1="12" y1="2" x2="12" y2="12"></line>
+        </svg>
+      </div>
+      <h2 style="font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 8px;">Camera Disconnected</h2>
+      <p style="font-size: 13px; color: #94a3b8; margin-bottom: 24px; line-height: 1.5;">Your camera stream has stopped and microphone is turned off.</p>
+      <button class="btn-rejoin" id="btnRejoin">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="23 7 16 12 23 17 23 7"></polygon>
+          <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+        </svg>
+        <span>Reconnect Camera</span>
+      </button>
+    </div>
+  </div>
+
   <script>
     const urlParams = new URLSearchParams(window.location.search);
     const targetRoom = (urlParams.get("room") || "DEFAULT").toUpperCase();
@@ -544,25 +625,46 @@
 
     function exitStream() {
       haptic();
-      if (frameInterval) clearInterval(frameInterval);
+      if (frameInterval) {
+        clearInterval(frameInterval);
+        frameInterval = null;
+      }
       if (peerConnection) {
         try { peerConnection.close(); } catch(e) {}
+        peerConnection = null;
       }
       if (socket) {
         socket.disconnect();
       }
       if (localStream) {
         localStream.getTracks().forEach(t => t.stop());
+        localStream = null;
+      }
+      if (cameraView) {
+        cameraView.srcObject = null;
+      }
+      const exitScreen = document.getElementById("exitScreen");
+      if (exitScreen) {
+        exitScreen.classList.add("active");
       }
       if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
         window.ReactNativeWebView.postMessage("disconnect");
-      } else {
-        window.location.reload();
       }
     }
 
     btnDisconnectHeader.addEventListener("click", exitStream);
     btnExitBottom.addEventListener("click", exitStream);
+
+    const btnRejoin = document.getElementById("btnRejoin");
+    if (btnRejoin) {
+      btnRejoin.addEventListener("click", async () => {
+        haptic();
+        const exitScreen = document.getElementById("exitScreen");
+        if (exitScreen) exitScreen.classList.remove("active");
+        await initCamera(currentFacing);
+        connectSocket();
+      });
+    }
 
     // Tap to focus animation
     window.addEventListener("click", (e) => {
