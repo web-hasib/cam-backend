@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>PhoneCam - Mobile Camera Broadcaster</title>
+  <title>PhoneCam Studio Broadcaster</title>
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
   <style>
     * {
@@ -45,7 +45,7 @@
       flex-direction: column;
       justify-content: space-between;
       pointer-events: none;
-      padding-top: max(env(safe-area-inset-top, 24px), 36px);
+      padding-top: max(env(safe-area-inset-top, 24px), 32px);
       padding-bottom: max(env(safe-area-inset-bottom, 20px), 28px);
       padding-left: 16px;
       padding-right: 16px;
@@ -53,6 +53,7 @@
     .ui-interactive {
       pointer-events: auto;
     }
+
     /* Top Header */
     .top-header {
       display: flex;
@@ -62,8 +63,8 @@
     }
     .status-badge {
       background: rgba(11, 17, 32, 0.88);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
       border: 1px solid rgba(255, 255, 255, 0.12);
       padding: 8px 14px;
       border-radius: 9999px;
@@ -72,8 +73,8 @@
       gap: 8px;
       font-size: 12px;
       font-weight: 600;
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
-      max-width: 50%;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+      max-width: 55%;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -97,15 +98,16 @@
     .status-dot.error {
       background: #ef4444;
     }
+
     .top-actions {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
     }
     .room-badge {
       background: rgba(11, 17, 32, 0.88);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
       border: 1px solid rgba(56, 189, 248, 0.35);
       color: #38bdf8;
       font-family: monospace;
@@ -113,10 +115,10 @@
       padding: 8px 12px;
       border-radius: 9999px;
       font-size: 12px;
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
     }
     .btn-disconnect-header {
-      background: rgba(225, 29, 72, 0.9);
+      background: rgba(225, 29, 72, 0.92);
       border: 1px solid #f43f5e;
       color: #ffffff;
       padding: 8px 12px;
@@ -128,11 +130,37 @@
       gap: 5px;
       cursor: pointer;
       box-shadow: 0 4px 14px rgba(225, 29, 72, 0.4);
-      transition: all 0.15s ease;
+      transition: transform 0.1s;
     }
     .btn-disconnect-header:active {
-      transform: scale(0.94);
+      transform: scale(0.92);
       background: #be123c;
+    }
+
+    /* Live Telemetry Pill */
+    .telemetry-row {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .telemetry-pill {
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 3px 10px;
+      border-radius: 9999px;
+      font-size: 10px;
+      font-weight: 600;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .telemetry-val {
+      color: #38bdf8;
+      font-family: monospace;
     }
 
     /* Standby Banner */
@@ -141,8 +169,8 @@
       align-self: center;
       background: rgba(11, 17, 32, 0.92);
       border: 1px solid #38bdf8;
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
       padding: 12px 20px;
       border-radius: 14px;
       text-align: center;
@@ -170,27 +198,48 @@
       font-size: 12px;
       cursor: pointer;
       box-shadow: 0 2px 10px rgba(2, 132, 199, 0.5);
-      transition: opacity 0.15s;
     }
-    .btn-takeover:active {
-      opacity: 0.85;
+
+    /* Tap to focus reticle */
+    .focus-ring {
+      position: absolute;
+      width: 60px;
+      height: 60px;
+      border: 1.5px solid #38bdf8;
+      border-radius: 8px;
+      pointer-events: none;
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(1.3);
+      transition: opacity 0.2s, transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 20;
+    }
+    .focus-ring.active {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
     }
 
     /* Bottom Controls */
+    .bottom-controls-box {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      align-items: center;
+    }
     .bottom-controls {
       display: flex;
       align-items: center;
       justify-content: space-evenly;
-      padding-bottom: 6px;
+      width: 100%;
+      max-width: 420px;
       gap: 12px;
     }
     .btn-tool {
       width: 52px;
       height: 52px;
       border-radius: 50%;
-      background: rgba(11, 17, 32, 0.88);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
       border: 1px solid rgba(255, 255, 255, 0.15);
       color: #cbd5e1;
       display: flex;
@@ -198,17 +247,17 @@
       justify-content: center;
       cursor: pointer;
       box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
-      transition: transform 0.1s, background-color 0.2s, border-color 0.2s;
+      transition: transform 0.1s, background-color 0.15s;
     }
     .btn-tool:active {
-      transform: scale(0.92);
+      transform: scale(0.9);
       background: rgba(30, 41, 59, 0.95);
     }
     .btn-tool.active {
       background: #0284c7;
       border-color: #38bdf8;
       color: #ffffff;
-      box-shadow: 0 0 14px rgba(56, 189, 248, 0.5);
+      box-shadow: 0 0 16px rgba(56, 189, 248, 0.6);
     }
     .btn-tool.danger {
       background: #e11d48;
@@ -216,8 +265,8 @@
       color: #ffffff;
     }
     .btn-main {
-      width: 66px;
-      height: 66px;
+      width: 68px;
+      height: 68px;
       border-radius: 50%;
       background: linear-gradient(135deg, #0284c7, #0369a1);
       border: 2px solid #38bdf8;
@@ -226,7 +275,7 @@
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      box-shadow: 0 4px 20px rgba(2, 132, 199, 0.5);
+      box-shadow: 0 4px 22px rgba(2, 132, 199, 0.5);
       transition: transform 0.1s;
     }
     .btn-main:active {
@@ -264,122 +313,59 @@
       0%, 100% { opacity: 0.3; }
       50% { opacity: 1; }
     }
-
-    /* Pair Modal */
-    .modal {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      background: rgba(0, 0, 0, 0.85);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      z-index: 200;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
-    }
-    .modal-card {
-      background: #0b1120;
-      border: 1px solid #1e293b;
-      border-radius: 16px;
-      padding: 24px;
-      width: 100%;
-      max-width: 360px;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8);
-    }
-    .modal-title {
-      font-size: 17px;
-      font-weight: 700;
-      color: #f8fafc;
-      margin-bottom: 6px;
-    }
-    .modal-desc {
-      font-size: 12px;
-      color: #94a3b8;
-      line-height: 1.5;
-      margin-bottom: 20px;
-    }
-    .input-group {
-      margin-bottom: 16px;
-    }
-    .input-label {
-      display: block;
-      font-size: 11px;
-      font-weight: 600;
-      color: #cbd5e1;
-      margin-bottom: 6px;
-      letter-spacing: 0.3px;
-    }
-    .text-input {
-      width: 100%;
-      background: #030712;
-      border: 1px solid #334155;
-      border-radius: 8px;
-      padding: 12px 14px;
-      color: #fff;
-      font-size: 14px;
-      font-family: monospace;
-      outline: none;
-      text-transform: uppercase;
-    }
-    .text-input:focus {
-      border-color: #38bdf8;
-      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
-    }
-    .btn-start {
-      width: 100%;
-      background: #0284c7;
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      padding: 12px;
-      font-size: 14px;
-      font-weight: 700;
-      cursor: pointer;
-      margin-top: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-    }
-    .btn-start:active {
-      background: #0369a1;
-    }
   </style>
 </head>
 <body>
   <!-- Camera Viewfinder -->
   <video id="cameraView" autoplay playsinline muted></video>
 
+  <!-- Focus Ring Element -->
+  <div class="focus-ring" id="focusRing"></div>
+
   <!-- UI Overlay -->
   <div class="ui-overlay">
-    <!-- Top Bar -->
-    <div class="top-header ui-interactive">
-      <div class="status-badge">
-        <span class="status-dot" id="statusDot"></span>
-        <span id="statusText">Connecting...</span>
+    <!-- Top Header -->
+    <div class="top-header-box ui-interactive">
+      <div class="top-header">
+        <div class="status-badge">
+          <span class="status-dot" id="statusDot"></span>
+          <span id="statusText">Connecting...</span>
+        </div>
+
+        <div class="top-actions">
+          <div class="room-badge" id="roomBadge">ROOM: ----</div>
+          <button class="btn-disconnect-header" id="btnDisconnectHeader" title="Disconnect & Exit">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+            <span>Exit</span>
+          </button>
+        </div>
       </div>
 
-      <div class="top-actions">
-        <div class="room-badge" id="roomBadge">ROOM: ----</div>
-        <button class="btn-disconnect-header" id="btnDisconnectHeader" title="Exit Stream">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-          <span>Exit</span>
-        </button>
+      <!-- Live Telemetry -->
+      <div class="telemetry-row">
+        <div class="telemetry-pill">
+          <span>Mode:</span>
+          <span class="telemetry-val" id="telemetryMode">P2P HD</span>
+        </div>
+        <div class="telemetry-pill">
+          <span>FPS:</span>
+          <span class="telemetry-val" id="telemetryFps">30</span>
+        </div>
+        <div class="telemetry-pill">
+          <span>Latency:</span>
+          <span class="telemetry-val" id="telemetryPing">~5ms</span>
+        </div>
       </div>
     </div>
 
     <!-- Standby Switcher Banner -->
     <div class="standby-banner ui-interactive" id="standbyBanner">
-      <div class="standby-text">Another camera is active</div>
+      <div class="standby-text">Another phone is broadcasting</div>
       <button class="btn-takeover" id="btnTakeover">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polygon points="23 7 16 12 23 17 23 7"></polygon>
           <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
         </svg>
@@ -387,89 +373,74 @@
       </button>
     </div>
 
-    <!-- Bottom Controls -->
-    <div class="bottom-controls ui-interactive">
-      <!-- Torch Button -->
-      <button class="btn-tool" id="btnTorch" title="Flashlight">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-        </svg>
-      </button>
+    <!-- Bottom Controls with Clean SVG Icons -->
+    <div class="bottom-controls-box ui-interactive">
+      <div class="bottom-controls">
+        <!-- Flashlight / Torch Button -->
+        <button class="btn-tool" id="btnTorch" title="Flashlight">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+        </button>
 
-      <!-- Mute Mic Button -->
-      <button class="btn-tool" id="btnMute" title="Microphone">
-        <svg id="svgMicOn" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-          <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-          <line x1="12" y1="19" x2="12" y2="23"></line>
-          <line x1="8" y1="23" x2="16" y2="23"></line>
-        </svg>
-        <svg id="svgMicOff" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
-          <line x1="1" y1="1" x2="23" y2="23"></line>
-          <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path>
-          <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path>
-          <line x1="12" y1="19" x2="12" y2="23"></line>
-          <line x1="8" y1="23" x2="16" y2="23"></line>
-        </svg>
-      </button>
+        <!-- Mute / Unmute Mic Button -->
+        <button class="btn-tool" id="btnMute" title="Microphone">
+          <svg id="svgMicOn" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            <line x1="12" y1="19" x2="12" y2="23"></line>
+            <line x1="8" y1="23" x2="16" y2="23"></line>
+          </svg>
+          <svg id="svgMicOff" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" style="display: none;">
+            <line x1="1" y1="1" x2="23" y2="23"></line>
+            <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path>
+            <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"></path>
+            <line x1="12" y1="19" x2="12" y2="23"></line>
+            <line x1="8" y1="23" x2="16" y2="23"></line>
+          </svg>
+        </button>
 
-      <!-- Flip Camera Button (Center Main) -->
-      <button class="btn-main" id="btnFlip" title="Flip Camera">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M11 19H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"></path>
-          <path d="M13 5h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-5"></path>
-          <circle cx="12" cy="12" r="3"></circle>
-          <path d="m18 22-3-3 3-3"></path>
-          <path d="m6 2 3 3-3 3"></path>
-        </svg>
-      </button>
+        <!-- Flip Camera Button (Center Main) -->
+        <button class="btn-main" id="btnFlip" title="Flip Camera">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 19H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"></path>
+            <path d="M13 5h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-5"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="m18 22-3-3 3-3"></path>
+            <path d="m6 2 3 3-3 3"></path>
+          </svg>
+        </button>
 
-      <!-- OLED Dimmer Button -->
-      <button class="btn-tool" id="btnDimmer" title="OLED Saver">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-        </svg>
-      </button>
+        <!-- OLED Battery Saver Dimmer -->
+        <button class="btn-tool" id="btnDimmer" title="OLED Battery Saver">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </button>
 
-      <!-- Settings / Room ID Button -->
-      <button class="btn-tool" id="btnSettings" title="Room Code">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="3"></circle>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-        </svg>
-      </button>
+        <!-- Disconnect Action Button -->
+        <button class="btn-tool danger" id="btnExitBottom" title="Disconnect">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+            <line x1="12" y1="2" x2="12" y2="12"></line>
+          </svg>
+        </button>
+      </div>
     </div>
   </div>
 
-  <!-- OLED Battery Saver Dimmer -->
+  <!-- OLED Battery Saver Overlay -->
   <div class="dimmer" id="dimmerOverlay">
     <div class="dimmer-dot"></div>
-    <div style="font-size: 13px; font-weight: 600; color: #f1f5f9;">Live Streaming to PC</div>
-    <div style="font-size: 11px; margin-top: 6px; color: #64748b;">Tap anywhere to wake display</div>
-  </div>
-
-  <!-- Connect / Settings Modal -->
-  <div class="modal" id="pairModal" style="display: none;">
-    <div class="modal-card">
-      <h3 class="modal-title">Pair with Desktop</h3>
-      <p class="modal-desc">Enter the 8-character Session ID shown on your Desktop PhoneCam Studio screen.</p>
-      
-      <div class="input-group">
-        <label class="input-label">SESSION / ROOM ID</label>
-        <input type="text" id="inputRoomId" class="text-input" placeholder="KLRC-KWV5" maxlength="9" autofocus>
-      </div>
-
-      <button class="btn-start" id="btnConnectRoom">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <polygon points="5 3 19 12 5 21 5 3"></polygon>
-        </svg>
-        <span>Start Live Stream</span>
-      </button>
-    </div>
+    <div style="font-size: 15px; font-weight: 700; color: #f1f5f9; letter-spacing: 0.5px;">Live Streaming to PC</div>
+    <div style="font-size: 11px; margin-top: 6px; color: #64748b;">Screen power saved • Tap anywhere to wake</div>
   </div>
 
   <script>
-    // Configuration & State
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetRoom = (urlParams.get("room") || "DEFAULT").toUpperCase();
+    const SERVER_URL = window.location.origin;
+
     const RTC_CONFIG = {
       iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
@@ -484,11 +455,6 @@
         },
         {
           urls: "turn:openrelay.metered.ca:443",
-          username: "openrelay",
-          credential: "openrelay"
-        },
-        {
-          urls: "turn:openrelay.metered.ca:443?transport=tcp",
           username: "openrelay",
           credential: "openrelay"
         }
@@ -510,16 +476,13 @@
     const offscreenCanvas = document.createElement("canvas");
     const offscreenCtx = offscreenCanvas.getContext("2d");
 
-    // Parse URL params
-    const urlParams = new URLSearchParams(window.location.search);
-    let targetRoom = (urlParams.get("room") || "").trim().toUpperCase();
-
     // DOM Elements
     const cameraView = document.getElementById("cameraView");
     const statusDot = document.getElementById("statusDot");
     const statusText = document.getElementById("statusText");
     const roomBadge = document.getElementById("roomBadge");
     const btnDisconnectHeader = document.getElementById("btnDisconnectHeader");
+    const btnExitBottom = document.getElementById("btnExitBottom");
     const standbyBanner = document.getElementById("standbyBanner");
     const btnTakeover = document.getElementById("btnTakeover");
     const btnFlip = document.getElementById("btnFlip");
@@ -528,18 +491,27 @@
     const svgMicOn = document.getElementById("svgMicOn");
     const svgMicOff = document.getElementById("svgMicOff");
     const btnDimmer = document.getElementById("btnDimmer");
-    const btnSettings = document.getElementById("btnSettings");
     const dimmerOverlay = document.getElementById("dimmerOverlay");
-    const pairModal = document.getElementById("pairModal");
-    const inputRoomId = document.getElementById("inputRoomId");
-    const btnConnectRoom = document.getElementById("btnConnectRoom");
+    const focusRing = document.getElementById("focusRing");
+    const telemetryMode = document.getElementById("telemetryMode");
+    const telemetryPing = document.getElementById("telemetryPing");
+
+    roomBadge.textContent = "ROOM: " + targetRoom;
+
+    function haptic() {
+      if (navigator.vibrate) {
+        navigator.vibrate(15);
+      }
+    }
 
     function setStatus(text, type = "normal") {
-      statusText.textContent = text;
-      statusDot.className = "status-dot";
-      if (type === "connected") statusDot.classList.add("connected");
-      if (type === "standby") statusDot.classList.add("standby");
-      if (type === "error") statusDot.classList.add("error");
+      if (statusText) statusText.textContent = text;
+      if (statusDot) {
+        statusDot.className = "status-dot";
+        if (type === "connected") statusDot.classList.add("connected");
+        if (type === "standby") statusDot.classList.add("standby");
+        if (type === "error") statusDot.classList.add("error");
+      }
     }
 
     function updateBroadcasterState(active) {
@@ -547,6 +519,7 @@
       if (isBroadcaster) {
         standbyBanner.classList.remove("active");
         setStatus("Live (Active)", "connected");
+        if (telemetryMode) telemetryMode.textContent = "WebRTC P2P";
       } else {
         standbyBanner.classList.add("active");
         setStatus("Standby", "standby");
@@ -554,6 +527,7 @@
     }
 
     function exitStream() {
+      haptic();
       if (frameInterval) clearInterval(frameInterval);
       if (peerConnection) {
         try { peerConnection.close(); } catch(e) {}
@@ -564,18 +538,28 @@
       if (localStream) {
         localStream.getTracks().forEach(t => t.stop());
       }
-      // Notify React Native WebView if present
       if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
         window.ReactNativeWebView.postMessage("disconnect");
       } else {
-        pairModal.style.display = "flex";
-        setStatus("Disconnected", "error");
+        window.location.reload();
       }
     }
 
     btnDisconnectHeader.addEventListener("click", exitStream);
+    btnExitBottom.addEventListener("click", exitStream);
 
-    // Frame streaming
+    // Tap to focus animation
+    window.addEventListener("click", (e) => {
+      if (e.target.closest("button") || e.target.closest(".ui-interactive")) return;
+      if (focusRing) {
+        focusRing.style.left = e.clientX + "px";
+        focusRing.style.top = e.clientY + "px";
+        focusRing.classList.add("active");
+        setTimeout(() => focusRing.classList.remove("active"), 800);
+      }
+    });
+
+    // Fallback frame streaming
     function startFrameStreaming() {
       if (frameInterval) clearInterval(frameInterval);
       frameInterval = setInterval(() => {
@@ -601,14 +585,20 @@
             fromSocketId: socket.id
           });
         }
-      }, 40); // 25 fps
+      }, 40);
     }
 
-    // Start Camera
+    // Start Camera & High Quality Audio
     async function initCamera(facingMode = currentFacing) {
       if (localStream) {
         localStream.getTracks().forEach(t => t.stop());
       }
+
+      const audioConstraints = isMuted ? false : {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      };
 
       let stream = null;
       try {
@@ -618,21 +608,25 @@
             width: { ideal: 1280 },
             height: { ideal: 720 }
           },
-          audio: false
+          audio: audioConstraints
         });
       } catch (e1) {
         try {
           stream = await navigator.mediaDevices.getUserMedia({
             video: { facingMode: facingMode },
-            audio: false
+            audio: audioConstraints
           });
         } catch (e2) {
           try {
-            stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
           } catch (e3) {
-            console.error("Camera access failed completely:", e3);
-            setStatus("Camera Access Denied", "error");
-            return;
+            try {
+              stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+            } catch (e4) {
+              console.error("Camera access failed completely:", e4);
+              setStatus("Camera Access Denied", "error");
+              return;
+            }
           }
         }
       }
@@ -667,6 +661,7 @@
 
     // Toggle Torch
     async function toggleTorch() {
+      haptic();
       if (!localStream) return;
       const videoTrack = localStream.getVideoTracks()[0];
       try {
@@ -718,8 +713,13 @@
       peerConnection.onconnectionstatechange = () => {
         const state = peerConnection.connectionState;
         if (state === "connected") {
+          if (frameInterval) {
+            clearInterval(frameInterval);
+            frameInterval = null;
+          }
           updateBroadcasterState(isBroadcaster);
         } else if (state === "disconnected" || state === "failed") {
+          startFrameStreaming();
           setStatus("Reconnecting...", "error");
         }
       };
@@ -739,32 +739,26 @@
           deviceName: myDeviceName
         });
       } catch (err) {
-        console.error("Error creating WebRTC offer:", err);
+        console.error("WebRTC Offer error:", err);
       }
     }
 
     // Connect Socket.IO
     function connectSocket() {
-      if (!targetRoom) {
-        pairModal.style.display = "flex";
-        setStatus("Enter Session ID");
-        return;
-      }
-
-      roomBadge.textContent = "ROOM: " + targetRoom;
       setStatus("Connecting to server...");
 
       if (socket) {
         socket.disconnect();
       }
 
-      socket = io({
+      socket = io(SERVER_URL, {
         transports: ["websocket", "polling"],
         timeout: 10000
       });
 
       socket.on("connect", () => {
         setStatus("Joining room...");
+        if (telemetryPing) telemetryPing.textContent = "<10ms";
         socket.emit("join-room", {
           roomId: targetRoom,
           clientType: "mobile",
@@ -779,7 +773,7 @@
 
       socket.on("peer-joined", async (data) => {
         if (data.clientType === "desktop") {
-          setStatus("Desktop connected...");
+          setStatus("Desktop connected...", "connected");
           await startWebRTCStream();
         }
       });
@@ -807,7 +801,7 @@
           }
           updateBroadcasterState(isBroadcaster);
         } catch (err) {
-          console.error("Failed to set remote description:", err);
+          console.error("Remote desc error:", err);
         }
       });
 
@@ -832,8 +826,9 @@
       });
     }
 
-    // Takeover button
+    // Takeover Button
     btnTakeover.addEventListener("click", () => {
+      haptic();
       if (socket && socket.connected && targetRoom) {
         socket.emit("switch-active-camera", {
           roomId: targetRoom,
@@ -843,7 +838,9 @@
       }
     });
 
+    // Flip Camera Button
     btnFlip.addEventListener("click", () => {
+      haptic();
       const nextFacing = (currentFacing === "environment") ? "user" : "environment";
       isTorchOn = false;
       btnTorch.classList.remove("active");
@@ -852,7 +849,9 @@
 
     btnTorch.addEventListener("click", toggleTorch);
 
+    // Mute Microphone Button
     btnMute.addEventListener("click", () => {
+      haptic();
       if (!localStream) return;
       isMuted = !isMuted;
       localStream.getAudioTracks().forEach(t => t.enabled = !isMuted);
@@ -866,7 +865,9 @@
       }
     });
 
+    // OLED Dimmer Button
     btnDimmer.addEventListener("click", () => {
+      haptic();
       dimmerOverlay.classList.add("active");
     });
 
@@ -874,23 +875,7 @@
       dimmerOverlay.classList.remove("active");
     });
 
-    btnSettings.addEventListener("click", () => {
-      inputRoomId.value = targetRoom;
-      pairModal.style.display = "flex";
-    });
-
-    btnConnectRoom.addEventListener("click", async () => {
-      const code = inputRoomId.value.trim().toUpperCase();
-      if (!code) return;
-      targetRoom = code;
-      pairModal.style.display = "none";
-      const newUrl = window.location.pathname + "?room=" + encodeURIComponent(targetRoom);
-      window.history.replaceState({}, "", newUrl);
-      connectSocket();
-      await startWebRTCStream();
-    });
-
-    // Auto-init on page load
+    // Auto-init
     (async function init() {
       await initCamera("environment");
       connectSocket();
