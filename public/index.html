@@ -604,8 +604,17 @@
       }, 40);
     }
 
+    let videoDeviceList = [];
+
+    async function refreshCameraDevices() {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        videoDeviceList = devices.filter(d => d.kind === "videoinput");
+      } catch (e) {}
+    }
+
     // Start Camera & High Quality Audio
-    async function initCamera(facingMode = currentFacing) {
+    async function initCamera(facingMode = currentFacing, specificDeviceId = null) {
       if (localStream) {
         localStream.getTracks().forEach(t => t.stop());
       }
@@ -617,29 +626,36 @@
       };
 
       let stream = null;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { ideal: facingMode },
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          },
-          audio: audioConstraints
-        });
-      } catch (e1) {
+
+      // 1. If explicit deviceId is provided
+      if (specificDeviceId) {
         try {
           stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: facingMode },
+            video: { deviceId: { exact: specificDeviceId }, width: { ideal: 1280 }, height: { ideal: 720 } },
             audio: audioConstraints
           });
-        } catch (e2) {
+        } catch (e) {}
+      }
+
+      // 2. Try exact facingMode ("user" for front selfie, "environment" for back)
+      if (!stream) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { exact: facingMode }, width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: audioConstraints
+          });
+        } catch (e) {
+          // 3. Fallback to ideal facingMode
           try {
-            stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-          } catch (e3) {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: { facingMode: facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+              audio: audioConstraints
+            });
+          } catch (e2) {
             try {
-              stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-            } catch (e4) {
-              console.error("Camera access failed completely:", e4);
+              stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: audioConstraints });
+            } catch (e3) {
+              console.error("Camera access failed completely:", e3);
               setStatus("Camera Access Denied", "error");
               return;
             }
@@ -649,8 +665,10 @@
 
       localStream = stream;
       cameraView.srcObject = localStream;
-      cameraView.className = (facingMode === "user") ? "mirror" : "";
       currentFacing = facingMode;
+      cameraView.className = (currentFacing === "user") ? "mirror" : "";
+
+      await refreshCameraDevices();
 
       cameraView.onloadedmetadata = () => {
         cameraView.play().catch(() => {});
@@ -854,13 +872,39 @@
       }
     });
 
-    // Flip Camera Button
-    btnFlip.addEventListener("click", () => {
+    // Flip Camera Button (Front / Back Selfie)
+    btnFlip.addEventListener("click", async () => {
       haptic();
+      btnFlip.style.transform = "rotate(180deg) scale(0.9)";
+      setTimeout(() => { btnFlip.style.transform = ""; }, 250);
+
       const nextFacing = (currentFacing === "environment") ? "user" : "environment";
       isTorchOn = false;
       btnTorch.classList.remove("active");
-      initCamera(nextFacing);
+
+      await refreshCameraDevices();
+
+      let targetDeviceId = null;
+      if (videoDeviceList.length > 1) {
+        if (nextFacing === "user") {
+          const front = videoDeviceList.find(d => 
+            d.label.toLowerCase().includes("front") || 
+            d.label.toLowerCase().includes("user") ||
+            d.label.toLowerCase().includes("facing front") ||
+            d.label.toLowerCase().includes("selfie")
+          );
+          if (front) targetDeviceId = front.deviceId;
+        } else {
+          const back = videoDeviceList.find(d => 
+            d.label.toLowerCase().includes("back") || 
+            d.label.toLowerCase().includes("environment") ||
+            d.label.toLowerCase().includes("rear")
+          );
+          if (back) targetDeviceId = back.deviceId;
+        }
+      }
+
+      await initCamera(nextFacing, targetDeviceId);
     });
 
     btnTorch.addEventListener("click", toggleTorch);
