@@ -10,9 +10,11 @@ import {
 import { Server, Socket } from "socket.io";
 import { Logger } from "@nestjs/common";
 
-interface RoomParticipant {
+export interface RoomParticipant {
   socketId: string;
   clientType: "desktop" | "mobile";
+  deviceName: string;
+  isBroadcasting: boolean;
   joinedAt: Date;
 }
 
@@ -29,6 +31,7 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
 
   private readonly logger = new Logger(SignalingGateway.name);
   private readonly rooms = new Map<string, RoomParticipant[]>();
+  private readonly activeBroadcasters = new Map<string, string>(); // roomId -> active mobile socketId
 
   handleConnection(client: Socket) {
     this.logger.log(`Client connected: ${client.id}`);
@@ -39,15 +42,55 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
 
     // Clean up room records
     for (const [roomId, participants] of this.rooms.entries()) {
+      const leavingParticipant = participants.find((p) => p.socketId === client.id);
       const remaining = participants.filter((p) => p.socketId !== client.id);
+
       if (remaining.length !== participants.length) {
         this.rooms.set(roomId, remaining);
-        // Notify other participants in the room
-        this.server.to(roomId).emit("peer-disconnected", { socketId: client.id });
         this.logger.log(`Removed ${client.id} from room: ${roomId}`);
+
+        const mobileParticipants = remaining.filter((p) => p.clientType === "mobile");
+
+        // If the disconnected device was the active broadcaster
+        if (this.activeBroadcasters.get(roomId) === client.id) {
+          if (mobileParticipants.length > 0) {
+            // Promote next connected mobile device
+            const nextBroadcaster = mobileParticipants[0];
+            nextBroadcaster.isBroadcasting = true;
+            this.activeBroadcasters.set(roomId, nextBroadcaster.socketId);
+
+            this.logger.log(
+              `Promoted ${nextBroadcaster.deviceName} (${nextBroadcaster.socketId}) to active camera in room ${roomId}`
+            );
+
+            this.server.to(roomId).emit("active-camera-changed", {
+              activeSocketId: nextBroadcaster.socketId,
+              deviceName: nextBroadcaster.deviceName,
+            });
+          } else {
+            this.activeBroadcasters.delete(roomId);
+            // Notify desktop that no phones remain
+            this.server.to(roomId).emit("peer-disconnected", {
+              socketId: client.id,
+              allDisconnected: true,
+            });
+          }
+        }
+
+        // Notify room about updated device list
+        this.server.to(roomId).emit("device-list-updated", {
+          devices: mobileParticipants.map((m) => ({
+            socketId: m.socketId,
+            deviceName: m.deviceName,
+            isBroadcasting: m.socketId === this.activeBroadcasters.get(roomId),
+          })),
+          activeSocketId: this.activeBroadcasters.get(roomId) || null,
+        });
       }
+
       if (remaining.length === 0) {
         this.rooms.delete(roomId);
+        this.activeBroadcasters.delete(roomId);
       }
     }
   }
@@ -55,7 +98,12 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
   @SubscribeMessage("join-room")
   handleJoinRoom(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { roomId: string; clientType: "desktop" | "mobile" }
+    @MessageBody()
+    data: {
+      roomId: string;
+      clientType: "desktop" | "mobile";
+      deviceName?: string;
+    }
   ) {
     const { roomId, clientType } = data;
     if (!roomId) return { error: "Missing roomId" };
@@ -69,72 +117,233 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
       this.rooms.set(normalizedRoom, participants);
     }
 
-    participants.push({
+    // Default device name if none provided
+    const deviceIndex = participants.filter((p) => p.clientType === "mobile").length + 1;
+    const deviceName =
+      data.deviceName ||
+      (clientType === "mobile" ? `Phone Camera ${deviceIndex}` : "Desktop Studio");
+
+    // Determine if this mobile device should be the active broadcaster
+    let isBroadcasting = false;
+    if (clientType === "mobile") {
+      const currentActive = this.activeBroadcasters.get(normalizedRoom);
+      if (!currentActive) {
+        this.activeBroadcasters.set(normalizedRoom, client.id);
+        isBroadcasting = true;
+      }
+    }
+
+    const participant: RoomParticipant = {
       socketId: client.id,
       clientType,
+      deviceName,
+      isBroadcasting,
       joinedAt: new Date(),
-    });
+    };
 
-    this.logger.log(`[${clientType}] joined room [${normalizedRoom}] (Socket: ${client.id})`);
+    participants.push(participant);
+
+    this.logger.log(
+      `[${clientType}] "${deviceName}" joined room [${normalizedRoom}] (Socket: ${client.id}, Active: ${isBroadcasting})`
+    );
+
+    const mobileList = participants
+      .filter((p) => p.clientType === "mobile")
+      .map((m) => ({
+        socketId: m.socketId,
+        deviceName: m.deviceName,
+        isBroadcasting: m.socketId === this.activeBroadcasters.get(normalizedRoom),
+      }));
 
     // Notify room that a new peer joined
     client.to(normalizedRoom).emit("peer-joined", {
       clientType,
       socketId: client.id,
+      deviceName,
       roomId: normalizedRoom,
+      isBroadcasting,
+      activeSocketId: this.activeBroadcasters.get(normalizedRoom) || null,
+      devices: mobileList,
     });
 
-    return { success: true, roomId: normalizedRoom, participantsCount: participants.length };
+    // Notify everyone of updated device list
+    this.server.to(normalizedRoom).emit("device-list-updated", {
+      devices: mobileList,
+      activeSocketId: this.activeBroadcasters.get(normalizedRoom) || null,
+    });
+
+    return {
+      success: true,
+      roomId: normalizedRoom,
+      socketId: client.id,
+      isBroadcasting,
+      activeSocketId: this.activeBroadcasters.get(normalizedRoom) || null,
+      devices: mobileList,
+    };
+  }
+
+  @SubscribeMessage("switch-active-camera")
+  handleSwitchCamera(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { roomId: string; targetSocketId: string }
+  ) {
+    const normalizedRoom = data.roomId?.trim().toUpperCase();
+    const participants = this.rooms.get(normalizedRoom) || [];
+    const target = participants.find((p) => p.socketId === data.targetSocketId);
+
+    if (target && target.clientType === "mobile") {
+      this.activeBroadcasters.set(normalizedRoom, target.socketId);
+      participants.forEach((p) => {
+        p.isBroadcasting = p.socketId === target.socketId;
+      });
+
+      this.logger.log(
+        `Switched active camera in room ${normalizedRoom} to: ${target.deviceName} (${target.socketId})`
+      );
+
+      const mobileList = participants
+        .filter((p) => p.clientType === "mobile")
+        .map((m) => ({
+          socketId: m.socketId,
+          deviceName: m.deviceName,
+          isBroadcasting: m.socketId === target.socketId,
+        }));
+
+      this.server.to(normalizedRoom).emit("active-camera-changed", {
+        activeSocketId: target.socketId,
+        deviceName: target.deviceName,
+      });
+
+      this.server.to(normalizedRoom).emit("device-list-updated", {
+        devices: mobileList,
+        activeSocketId: target.socketId,
+      });
+
+      return { success: true, activeSocketId: target.socketId };
+    }
+
+    return { success: false, error: "Target device not found" };
   }
 
   @SubscribeMessage("webrtc-offer")
   handleOffer(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { roomId: string; sdp: unknown; from: string }
+    @MessageBody()
+    data: {
+      roomId: string;
+      sdp: unknown;
+      from: string;
+      fromSocketId?: string;
+      deviceName?: string;
+      targetSocketId?: string;
+    }
   ) {
     const normalizedRoom = data.roomId?.trim().toUpperCase();
-    this.logger.log(`Relaying WebRTC Offer from [${data.from}] in room [${normalizedRoom}]`);
-    client.to(normalizedRoom).emit("webrtc-offer", {
-      sdp: data.sdp,
-      from: data.from,
-    });
+    const fromId = data.fromSocketId || client.id;
+    this.logger.log(
+      `Relaying WebRTC Offer from [${fromId}] (${data.deviceName || data.from}) in room [${normalizedRoom}]`
+    );
+
+    if (data.targetSocketId) {
+      this.server.to(data.targetSocketId).emit("webrtc-offer", {
+        sdp: data.sdp,
+        from: data.from,
+        fromSocketId: fromId,
+        deviceName: data.deviceName,
+      });
+    } else {
+      client.to(normalizedRoom).emit("webrtc-offer", {
+        sdp: data.sdp,
+        from: data.from,
+        fromSocketId: fromId,
+        deviceName: data.deviceName,
+      });
+    }
   }
 
   @SubscribeMessage("webrtc-answer")
   handleAnswer(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { roomId: string; sdp: unknown; from: string }
+    @MessageBody()
+    data: {
+      roomId: string;
+      sdp: unknown;
+      from: string;
+      targetSocketId?: string;
+    }
   ) {
     const normalizedRoom = data.roomId?.trim().toUpperCase();
-    this.logger.log(`Relaying WebRTC Answer from [${data.from}] in room [${normalizedRoom}]`);
-    client.to(normalizedRoom).emit("webrtc-answer", {
-      sdp: data.sdp,
-      from: data.from,
-    });
+    this.logger.log(
+      `Relaying WebRTC Answer from [${client.id}] to [${data.targetSocketId || "room"}] in room [${normalizedRoom}]`
+    );
+
+    if (data.targetSocketId) {
+      this.server.to(data.targetSocketId).emit("webrtc-answer", {
+        sdp: data.sdp,
+        from: data.from,
+        fromSocketId: client.id,
+      });
+    } else {
+      client.to(normalizedRoom).emit("webrtc-answer", {
+        sdp: data.sdp,
+        from: data.from,
+        fromSocketId: client.id,
+      });
+    }
   }
 
   @SubscribeMessage("ice-candidate")
   handleIceCandidate(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { roomId: string; candidate: unknown; from: string }
+    @MessageBody()
+    data: {
+      roomId: string;
+      candidate: unknown;
+      from: string;
+      fromSocketId?: string;
+      targetSocketId?: string;
+    }
   ) {
     const normalizedRoom = data.roomId?.trim().toUpperCase();
-    client.to(normalizedRoom).emit("ice-candidate", {
-      candidate: data.candidate,
-      from: data.from,
-    });
+    const fromId = data.fromSocketId || client.id;
+
+    if (data.targetSocketId) {
+      this.server.to(data.targetSocketId).emit("ice-candidate", {
+        candidate: data.candidate,
+        from: data.from,
+        fromSocketId: fromId,
+      });
+    } else {
+      client.to(normalizedRoom).emit("ice-candidate", {
+        candidate: data.candidate,
+        from: data.from,
+        fromSocketId: fromId,
+      });
+    }
   }
 
   @SubscribeMessage("video-frame")
   handleVideoFrame(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { roomId: string; image: string }
+    @MessageBody()
+    data: {
+      roomId: string;
+      image: string;
+      fromSocketId?: string;
+    }
   ) {
     const normalizedRoom = data.roomId?.trim().toUpperCase();
-    client.to(normalizedRoom).emit("video-frame", {
-      image: data.image,
-      from: "mobile",
-    });
+    const fromId = data.fromSocketId || client.id;
+    const activeId = this.activeBroadcasters.get(normalizedRoom);
+
+    // Only forward video frame if it is from the active broadcaster or if no active is set
+    if (!activeId || activeId === fromId) {
+      client.to(normalizedRoom).emit("video-frame", {
+        image: data.image,
+        from: "mobile",
+        fromSocketId: fromId,
+      });
+    }
   }
 
   @SubscribeMessage("stream-disconnect")

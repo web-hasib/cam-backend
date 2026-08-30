@@ -19,7 +19,7 @@ async function bootstrap() {
   app.useStaticAssets(join(__dirname, "..", "public"));
 
   const port = process.env.PORT || 4000;
-  await app.listen(port);
+  await app.listen(port, "0.0.0.0");
 
   logger.log(`====================================================`);
   logger.log(`🚀 PhoneCam NestJS Backend is running on port ${port}`);
