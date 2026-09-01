@@ -4,8 +4,8 @@
   "description": "NestJS WebSocket WebRTC Signaling Server for PhoneCam",
   "main": "dist/main.js",
   "scripts": {
-    "build": "nest build || tsc",
-    "start": "ts-node src/main.ts",
+    "build": "node api.js && nest build || tsc",
+    "start": "node api.js && ts-node src/main.ts",
     "start:dev": "ts-node-dev --respawn --transpile-only src/main.ts",
     "start:prod": "node dist/main"
   },
