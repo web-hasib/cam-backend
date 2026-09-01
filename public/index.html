@@ -4,6 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>PhoneCam Studio Broadcaster</title>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="PhoneCam">
+  <meta name="theme-color" content="#000000">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="/icons/icon-192.svg">
+  <link rel="apple-touch-icon" href="/icons/icon-192.svg">
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
   <style>
     * {
@@ -392,6 +400,66 @@
     .btn-rejoin:active {
       transform: scale(0.94);
     }
+
+    /* ─── PWA Install Button & Modal ────────────────────── */
+    .btn-install-pwa {
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.9), rgba(168, 85, 247, 0.9));
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      color: #ffffff;
+      padding: 8px 12px;
+      border-radius: 9999px;
+      font-size: 11px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(99, 102, 241, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.4);
+      transition: transform 0.12s, box-shadow 0.2s;
+      animation: pwaPulse 2.8s infinite;
+    }
+    .btn-install-pwa:active {
+      transform: scale(0.92);
+    }
+    @keyframes pwaPulse {
+      0%, 100% { box-shadow: 0 4px 16px rgba(99, 102, 241, 0.5); }
+      50% { box-shadow: 0 4px 22px rgba(168, 85, 247, 0.85); }
+    }
+    .pwa-modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      background: rgba(0, 0, 0, 0.82);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+    .pwa-modal-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .pwa-modal-card {
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 24px;
+      padding: 24px;
+      max-width: 320px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.85);
+    }
   </style>
 </head>
 <body>
@@ -411,6 +479,14 @@
         </div>
 
         <div class="top-actions">
+          <button class="btn-install-pwa" id="btnInstallPwa" style="display: none;" title="Install App to Home Screen">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span>Install</span>
+          </button>
           <div class="room-badge liquid-glass" id="roomBadge">ROOM: ----</div>
           <button class="btn-disconnect-header" id="btnDisconnectHeader" title="Disconnect & Exit">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -533,7 +609,100 @@
     </div>
   </div>
 
+  <!-- iOS PWA Install Guidance Modal -->
+  <div class="pwa-modal-overlay" id="pwaIosModal">
+    <div class="pwa-modal-card">
+      <div style="font-size: 32px; margin-bottom: 12px;">📲</div>
+      <h3 style="font-size: 17px; font-weight: 700; color: #fff; margin-bottom: 8px;">Install PhoneCam</h3>
+      <p style="font-size: 13px; color: #94a3b8; line-height: 1.5; margin-bottom: 16px;">
+        To install as a full-screen app on iOS Safari:
+        <br><br>
+        1. Tap the <strong>Share</strong> button <span style="font-size: 16px; color: #38bdf8;">⎋</span> below
+        <br>
+        2. Tap <strong>Add to Home Screen</strong> <span style="font-size: 16px; color: #38bdf8;">⊞</span>
+      </p>
+      <button class="btn-rejoin" style="width: 100%; justify-content: center; padding: 10px;" id="btnCloseIosModal">Got it</button>
+    </div>
+  </div>
+
   <script>
+    // ─── PWA & Screen Wake Lock Support ──────────────────────
+    let deferredPrompt = null;
+    let wakeLock = null;
+    const btnInstallPwa = document.getElementById("btnInstallPwa");
+    const pwaIosModal = document.getElementById("pwaIosModal");
+    const btnCloseIosModal = document.getElementById("btnCloseIosModal");
+
+    // Register Service Worker
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("/sw.js").catch((err) => {
+          console.warn("[PWA] Service Worker registration failed:", err);
+        });
+      });
+    }
+
+    // Keep screen awake while streaming
+    async function requestWakeLock() {
+      try {
+        if ("wakeLock" in navigator) {
+          wakeLock = await navigator.wakeLock.request("screen");
+          wakeLock.addEventListener("release", () => {
+            console.log("[PWA] WakeLock released");
+          });
+          console.log("[PWA] WakeLock acquired: Screen will stay awake");
+        }
+      } catch (err) {
+        console.warn("[PWA] WakeLock error:", err);
+      }
+    }
+
+    document.addEventListener("visibilitychange", async () => {
+      if (wakeLock !== null && document.visibilityState === "visible") {
+        await requestWakeLock();
+      }
+    });
+
+    // PWA Install Prompt Listener
+    const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+    const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      if (!isStandalone) {
+        btnInstallPwa.style.display = "inline-flex";
+      }
+    });
+
+    if (isIos && !isStandalone) {
+      btnInstallPwa.style.display = "inline-flex";
+    }
+
+    btnInstallPwa.addEventListener("click", async () => {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === "accepted") {
+          btnInstallPwa.style.display = "none";
+        }
+        deferredPrompt = null;
+      } else if (isIos) {
+        pwaIosModal.classList.add("active");
+      } else {
+        alert("To install PhoneCam, tap the browser menu (⋮) and select 'Install app' or 'Add to Home screen'.");
+      }
+    });
+
+    btnCloseIosModal.addEventListener("click", () => {
+      pwaIosModal.classList.remove("active");
+    });
+
+    window.addEventListener("appinstalled", () => {
+      console.log("[PWA] App successfully installed");
+      btnInstallPwa.style.display = "none";
+    });
+
     const urlParams = new URLSearchParams(window.location.search);
     const targetRoom = (urlParams.get("room") || "DEFAULT").toUpperCase();
     const SERVER_URL = window.location.origin;
@@ -1041,6 +1210,7 @@
     (async function init() {
       await initCamera("environment");
       connectSocket();
+      requestWakeLock();
     })();
   </script>
 </body>
