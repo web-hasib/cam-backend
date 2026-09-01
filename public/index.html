@@ -1343,10 +1343,14 @@
       }
     });
 
-    // ─── Fallback Frame Streaming ─────────────────────────────
+    // ─── Fallback Frame Streaming (Active ONLY when WebRTC P2P is not connected) ───
     function startFrameStreaming() {
       if (frameInterval) clearInterval(frameInterval);
       frameInterval = setInterval(() => {
+        // If WebRTC direct P2P is connected, do NOT send duplicate socket frames
+        if (peerConnection && peerConnection.connectionState === "connected") {
+          return;
+        }
         if (
           socket &&
           socket.connected &&
@@ -1355,21 +1359,21 @@
           cameraView.videoWidth > 0 &&
           isBroadcaster
         ) {
-          const w = 640;
-          const h = Math.round((w * cameraView.videoHeight) / cameraView.videoWidth) || 480;
+          const w = 480;
+          const h = Math.round((w * cameraView.videoHeight) / cameraView.videoWidth) || 360;
           if (offscreenCanvas.width !== w || offscreenCanvas.height !== h) {
             offscreenCanvas.width = w;
             offscreenCanvas.height = h;
           }
           offscreenCtx.drawImage(cameraView, 0, 0, w, h);
-          const dataUrl = offscreenCanvas.toDataURL("image/jpeg", 0.6);
+          const dataUrl = offscreenCanvas.toDataURL("image/jpeg", 0.5);
           socket.emit("video-frame", {
             roomId: targetRoom,
             image: dataUrl,
             fromSocketId: socket.id
           });
         }
-      }, 40);
+      }, 70); // Smooth 14-15 FPS fallback rate that never saturates mobile uplink
     }
 
     let videoDeviceList = [];

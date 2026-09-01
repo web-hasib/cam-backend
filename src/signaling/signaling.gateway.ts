@@ -24,6 +24,9 @@ export interface RoomParticipant {
     methods: ["GET", "POST"],
   },
   maxHttpBufferSize: 1e7, // 10 MB
+  pingInterval: 8000,
+  pingTimeout: 10000,
+  perMessageDeflate: false, // Disables CPU-heavy compression on pre-compressed JPEG/WebRTC packets
 })
 export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
@@ -32,6 +35,7 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
   private readonly logger = new Logger(SignalingGateway.name);
   private readonly rooms = new Map<string, RoomParticipant[]>();
   private readonly activeBroadcasters = new Map<string, string>(); // roomId -> active mobile socketId
+  private readonly socketRoomMap = new Map<string, string>(); // socketId -> roomId (O(1) lookup)
 
   handleConnection(client: Socket) {
     this.logger.log(`Client connected: ${client.id}`);
@@ -39,59 +43,67 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
 
   handleDisconnect(client: Socket) {
     this.logger.log(`Client disconnected: ${client.id}`);
+    const roomId = this.socketRoomMap.get(client.id);
+    this.socketRoomMap.delete(client.id);
 
-    // Clean up room records
-    for (const [roomId, participants] of this.rooms.entries()) {
-      const leavingParticipant = participants.find((p) => p.socketId === client.id);
-      const remaining = participants.filter((p) => p.socketId !== client.id);
+    if (roomId) {
+      this.cleanupParticipant(roomId, client.id);
+    } else {
+      // Fallback search
+      for (const rId of this.rooms.keys()) {
+        this.cleanupParticipant(rId, client.id);
+      }
+    }
+  }
 
-      if (remaining.length !== participants.length) {
-        this.rooms.set(roomId, remaining);
-        this.logger.log(`Removed ${client.id} from room: ${roomId}`);
+  private cleanupParticipant(roomId: string, socketId: string) {
+    const participants = this.rooms.get(roomId);
+    if (!participants) return;
 
-        const mobileParticipants = remaining.filter((p) => p.clientType === "mobile");
+    const remaining = participants.filter((p) => p.socketId !== socketId);
+    if (remaining.length !== participants.length) {
+      this.rooms.set(roomId, remaining);
+      this.logger.log(`Removed ${socketId} from room: ${roomId}`);
 
-        // If the disconnected device was the active broadcaster
-        if (this.activeBroadcasters.get(roomId) === client.id) {
-          if (mobileParticipants.length > 0) {
-            // Promote next connected mobile device
-            const nextBroadcaster = mobileParticipants[0];
-            nextBroadcaster.isBroadcasting = true;
-            this.activeBroadcasters.set(roomId, nextBroadcaster.socketId);
+      const mobileParticipants = remaining.filter((p) => p.clientType === "mobile");
 
-            this.logger.log(
-              `Promoted ${nextBroadcaster.deviceName} (${nextBroadcaster.socketId}) to active camera in room ${roomId}`
-            );
+      // If the disconnected device was the active broadcaster
+      if (this.activeBroadcasters.get(roomId) === socketId) {
+        if (mobileParticipants.length > 0) {
+          const nextBroadcaster = mobileParticipants[0];
+          nextBroadcaster.isBroadcasting = true;
+          this.activeBroadcasters.set(roomId, nextBroadcaster.socketId);
 
-            this.server.to(roomId).emit("active-camera-changed", {
-              activeSocketId: nextBroadcaster.socketId,
-              deviceName: nextBroadcaster.deviceName,
-            });
-          } else {
-            this.activeBroadcasters.delete(roomId);
-            // Notify desktop that no phones remain
-            this.server.to(roomId).emit("peer-disconnected", {
-              socketId: client.id,
-              allDisconnected: true,
-            });
-          }
+          this.logger.log(
+            `Promoted ${nextBroadcaster.deviceName} (${nextBroadcaster.socketId}) to active camera in room ${roomId}`
+          );
+
+          this.server.to(roomId).emit("active-camera-changed", {
+            activeSocketId: nextBroadcaster.socketId,
+            deviceName: nextBroadcaster.deviceName,
+          });
+        } else {
+          this.activeBroadcasters.delete(roomId);
+          this.server.to(roomId).emit("peer-disconnected", {
+            socketId: socketId,
+            allDisconnected: true,
+          });
         }
-
-        // Notify room about updated device list
-        this.server.to(roomId).emit("device-list-updated", {
-          devices: mobileParticipants.map((m) => ({
-            socketId: m.socketId,
-            deviceName: m.deviceName,
-            isBroadcasting: m.socketId === this.activeBroadcasters.get(roomId),
-          })),
-          activeSocketId: this.activeBroadcasters.get(roomId) || null,
-        });
       }
 
-      if (remaining.length === 0) {
-        this.rooms.delete(roomId);
-        this.activeBroadcasters.delete(roomId);
-      }
+      this.server.to(roomId).emit("device-list-updated", {
+        devices: mobileParticipants.map((m) => ({
+          socketId: m.socketId,
+          deviceName: m.deviceName,
+          isBroadcasting: m.socketId === this.activeBroadcasters.get(roomId),
+        })),
+        activeSocketId: this.activeBroadcasters.get(roomId) || null,
+      });
+    }
+
+    if (remaining.length === 0) {
+      this.rooms.delete(roomId);
+      this.activeBroadcasters.delete(roomId);
     }
   }
 
@@ -110,6 +122,7 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
 
     const normalizedRoom = roomId.trim().toUpperCase();
     client.join(normalizedRoom);
+    this.socketRoomMap.set(client.id, normalizedRoom);
 
     let participants = this.rooms.get(normalizedRoom);
     if (!participants) {
@@ -338,7 +351,7 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
 
     // Only forward video frame if it is from the active broadcaster or if no active is set
     if (!activeId || activeId === fromId) {
-      client.to(normalizedRoom).emit("video-frame", {
+      client.to(normalizedRoom).volatile.emit("video-frame", {
         image: data.image,
         from: "mobile",
         fromSocketId: fromId,
