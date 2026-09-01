@@ -287,6 +287,18 @@
       border-color: rgba(244, 63, 94, 0.6);
       color: #ffffff;
     }
+    .badge-rot {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      font-size: 8px;
+      font-weight: 800;
+      color: #38bdf8;
+      background: rgba(15, 23, 42, 0.85);
+      border-radius: 4px;
+      padding: 1px 3px;
+      pointer-events: none;
+    }
 
     /* Main Center Flip Button */
     .btn-dock-main {
@@ -850,6 +862,14 @@
         <path d="m18 22-3-3 3-3"></path>
         <path d="m6 2 3 3-3 3"></path>
       </svg>
+    </button>
+
+    <!-- Rotate Orientation (0°, 90°, 180°, 270°) -->
+    <button class="btn-dock-tool" id="btnRotatePhone" title="Rotate Camera Orientation">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+      </svg>
+      <span class="badge-rot" id="badgeRot">0°</span>
     </button>
 
     <!-- OLED Battery Saver Dimmer -->
@@ -1920,6 +1940,40 @@
 
     dimmerOverlay.addEventListener("click", () => {
       dimmerOverlay.classList.remove("active");
+    });
+
+    let phoneRotation = 0;
+    const btnRotatePhone = document.getElementById("btnRotatePhone");
+    const badgeRot = document.getElementById("badgeRot");
+
+    function applyPhoneRotationUI() {
+      if (cameraView) {
+        const mirror = (currentFacing === "user") ? "scaleX(-1)" : "";
+        cameraView.style.transform = `rotate(${phoneRotation}deg) ${mirror}`;
+      }
+      if (badgeRot) badgeRot.textContent = `${phoneRotation}°`;
+      if (socket && socket.connected && targetRoom) {
+        socket.emit("phone-rotation", { roomId: targetRoom, rotation: phoneRotation });
+      }
+    }
+
+    if (btnRotatePhone) {
+      btnRotatePhone.addEventListener("click", () => {
+        haptic();
+        phoneRotation = (phoneRotation + 90) % 360;
+        applyPhoneRotationUI();
+      });
+    }
+
+    window.addEventListener("orientationchange", () => {
+      const angle = window.orientation || (screen.orientation ? screen.orientation.angle : 0) || 0;
+      let targetRot = 0;
+      if (angle === 90) targetRot = 90;
+      else if (angle === -90 || angle === 270) targetRot = 270;
+      else if (angle === 180) targetRot = 180;
+      
+      phoneRotation = targetRot;
+      applyPhoneRotationUI();
     });
 
     // ─── Initialization Logic ─────────────────────────────────

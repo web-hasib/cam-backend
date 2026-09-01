@@ -359,6 +359,18 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
     }
   }
 
+  @SubscribeMessage("phone-rotation")
+  handlePhoneRotation(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { roomId: string; rotation: number }
+  ) {
+    const normalizedRoom = data.roomId?.trim().toUpperCase();
+    client.to(normalizedRoom).emit("phone-rotation", {
+      from: client.id,
+      rotation: data.rotation,
+    });
+  }
+
   @SubscribeMessage("stream-disconnect")
   handleStreamDisconnect(
     @ConnectedSocket() client: Socket,
