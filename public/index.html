@@ -13,6 +13,7 @@
   <link rel="icon" type="image/svg+xml" href="/icons/icon-192.svg">
   <link rel="apple-touch-icon" href="/icons/icon-192.svg">
   <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
   <style>
     * {
       box-sizing: border-box;
@@ -69,7 +70,7 @@
 
     /* ─── Liquid Glass Design Tokens ─────────────────────── */
     .liquid-glass {
-      background: rgba(15, 23, 42, 0.55);
+      background: rgba(15, 23, 42, 0.65);
       backdrop-filter: blur(28px) saturate(190%);
       -webkit-backdrop-filter: blur(28px) saturate(190%);
       border: 1px solid rgba(255, 255, 255, 0.2);
@@ -248,7 +249,6 @@
       max-width: 390px;
       z-index: 50;
       pointer-events: auto;
-      
       border-radius: 50px;
       padding: 8px 14px;
       display: flex;
@@ -341,64 +341,384 @@
       50% { opacity: 1; transform: scale(1.1); }
     }
 
-    /* ─── Exit Screen Modal ──────────────────────────────── */
-    .exit-screen {
+    /* ─── Modal Overlays & Cards ─────────────────────────── */
+    .modal-overlay {
       position: fixed;
       top: 0;
       left: 0;
       width: 100vw;
       height: 100vh;
       height: 100dvh;
-      background: radial-gradient(circle at center, rgba(11, 17, 32, 0.98) 0%, rgba(3, 7, 18, 0.99) 100%);
+      background: rgba(3, 7, 18, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
       z-index: 200;
       display: none;
       align-items: center;
       justify-content: center;
       padding: 24px;
-      backdrop-filter: blur(20px);
+      opacity: 0;
+      transition: opacity 0.25s ease;
     }
-    .exit-screen.active {
+    .modal-overlay.active {
       display: flex;
+      opacity: 1;
     }
-    .exit-card {
-      max-width: 340px;
+    .modal-card {
+      max-width: 360px;
       width: 100%;
-      padding: 36px 24px;
-      border-radius: 30px;
+      padding: 28px 22px;
+      border-radius: 28px;
       text-align: center;
       display: flex;
       flex-direction: column;
       align-items: center;
+      transform: scale(0.95);
+      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     }
-    .exit-icon-box {
-      width: 72px;
-      height: 72px;
+    .modal-overlay.active .modal-card {
+      transform: scale(1);
+    }
+
+    .modal-icon-badge {
+      width: 64px;
+      height: 64px;
       border-radius: 50%;
-      background: rgba(225, 29, 72, 0.15);
-      border: 1px solid rgba(244, 63, 94, 0.4);
       display: flex;
       align-items: center;
       justify-content: center;
-      margin-bottom: 18px;
-      box-shadow: 0 0 28px rgba(225, 29, 72, 0.35);
+      margin-bottom: 16px;
     }
-    .btn-rejoin {
+    .modal-icon-badge.danger {
+      background: rgba(225, 29, 72, 0.15);
+      border: 1px solid rgba(244, 63, 94, 0.4);
+      box-shadow: 0 0 24px rgba(225, 29, 72, 0.35);
+    }
+    .modal-icon-badge.warning {
+      background: rgba(245, 158, 11, 0.15);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      box-shadow: 0 0 24px rgba(245, 158, 11, 0.35);
+    }
+    .modal-icon-badge.success {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      box-shadow: 0 0 24px rgba(16, 185, 129, 0.35);
+    }
+
+    .modal-title {
+      font-size: 19px;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 8px;
+    }
+    .modal-desc {
+      font-size: 13px;
+      color: #94a3b8;
+      line-height: 1.5;
+      margin-bottom: 22px;
+    }
+
+    .modal-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: 100%;
+    }
+    .modal-actions-row {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .btn-modal-primary {
       background: linear-gradient(135deg, #0284c7, #0369a1);
       border: 1px solid rgba(255, 255, 255, 0.3);
       color: #fff;
-      padding: 13px 26px;
+      padding: 13px 20px;
       border-radius: 9999px;
       font-weight: 700;
       font-size: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      box-shadow: 0 4px 18px rgba(2, 132, 199, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.4);
+      transition: transform 0.12s;
+      width: 100%;
+    }
+    .btn-modal-primary:active {
+      transform: scale(0.95);
+    }
+
+    .btn-modal-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: #e2e8f0;
+      padding: 13px 20px;
+      border-radius: 9999px;
+      font-weight: 600;
+      font-size: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: transform 0.12s, background-color 0.15s;
+      width: 100%;
+    }
+    .btn-modal-secondary:active {
+      transform: scale(0.95);
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .btn-modal-danger {
+      background: linear-gradient(135deg, #e11d48, #be123c);
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      color: #fff;
+      padding: 13px 20px;
+      border-radius: 9999px;
+      font-weight: 700;
+      font-size: 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      box-shadow: 0 4px 18px rgba(225, 29, 72, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.4);
+      transition: transform 0.12s;
+      width: 100%;
+    }
+    .btn-modal-danger:active {
+      transform: scale(0.95);
+    }
+
+    /* ─── Scanner Screen (Default on Root) ───────────────── */
+    .scanner-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      background: #000000;
+      z-index: 150;
+      display: none;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: max(env(safe-area-inset-top, 24px), 24px) 16px max(env(safe-area-inset-bottom, 24px), 28px);
+    }
+    .scanner-screen.active {
+      display: flex;
+    }
+
+    #scannerVideo {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      object-fit: cover;
+      z-index: 1;
+    }
+
+    .scanner-header {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+    }
+
+    .scanner-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+    }
+    .scanner-brand-logo {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #0ea5e9, #0284c7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .scanner-brand-text {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: #f8fafc;
+    }
+
+    /* Centered Viewfinder Box */
+    .scanner-center-box {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .scanner-frame {
+      position: relative;
+      width: 260px;
+      height: 260px;
+      border-radius: 24px;
+      box-shadow: 0 0 0 4000px rgba(3, 7, 18, 0.72);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    /* Corner Markers */
+    .scanner-corner {
+      position: absolute;
+      width: 32px;
+      height: 32px;
+      border-color: #38bdf8;
+      border-style: solid;
+      pointer-events: none;
+    }
+    .scanner-corner.tl { top: 0; left: 0; border-width: 4px 0 0 4px; border-top-left-radius: 20px; }
+    .scanner-corner.tr { top: 0; right: 0; border-width: 4px 4px 0 0; border-top-right-radius: 20px; }
+    .scanner-corner.bl { bottom: 0; left: 0; border-width: 0 0 4px 4px; border-bottom-left-radius: 20px; }
+    .scanner-corner.br { bottom: 0; right: 0; border-width: 0 4px 4px 0; border-bottom-right-radius: 20px; }
+
+    /* Laser Scanning Line */
+    .scanner-laser {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, #38bdf8, #0ea5e9, #38bdf8, transparent);
+      box-shadow: 0 0 14px #38bdf8, 0 0 24px rgba(56, 189, 248, 0.8);
+      top: 20px;
+      animation: laserSweep 2.2s ease-in-out infinite alternate;
+    }
+    @keyframes laserSweep {
+      0% { top: 24px; opacity: 0.9; }
+      50% { opacity: 1; }
+      100% { top: calc(100% - 24px); opacity: 0.9; }
+    }
+
+    .scanner-tip-pill {
+      margin-top: 20px;
+      padding: 8px 18px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #e2e8f0;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      text-align: center;
+    }
+
+    .scanner-bottom-bar {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      max-width: 360px;
+      margin: 0 auto;
+    }
+
+    .scanner-tool-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    .btn-scanner-circle {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      color: #f8fafc;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: transform 0.12s;
+    }
+    .btn-scanner-circle:active {
+      transform: scale(0.9);
+    }
+    .btn-scanner-circle.active {
+      background: #0284c7;
+      border-color: #38bdf8;
+      box-shadow: 0 0 16px rgba(56, 189, 248, 0.6);
+    }
+
+    .btn-manual-pill {
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #38bdf8;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 12px 24px;
+      border-radius: 9999px;
       display: flex;
       align-items: center;
       gap: 8px;
       cursor: pointer;
-      box-shadow: 0 4px 20px rgba(2, 132, 199, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.4);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
       transition: transform 0.12s;
+      width: 100%;
+      justify-content: center;
     }
-    .btn-rejoin:active {
-      transform: scale(0.94);
+    .btn-manual-pill:active {
+      transform: scale(0.96);
+    }
+
+    /* ─── Manual Input Drawer / Dialog ───────────────────── */
+    .manual-input-box {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .manual-input-field {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 14px;
+      padding: 14px 16px;
+      color: #fff;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-align: center;
+      text-transform: uppercase;
+      outline: none;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
+    }
+    .manual-input-field:focus {
+      border-color: #38bdf8;
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+    }
+    .manual-input-field::placeholder {
+      color: #475569;
+      letter-spacing: 1px;
+      font-size: 14px;
+      font-weight: 500;
     }
 
     /* ─── PWA Install Button & Modal ────────────────────── */
@@ -427,50 +747,17 @@
       0%, 100% { box-shadow: 0 4px 16px rgba(99, 102, 241, 0.5); }
       50% { box-shadow: 0 4px 22px rgba(168, 85, 247, 0.85); }
     }
-    .pwa-modal-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      height: 100dvh;
-      background: rgba(0, 0, 0, 0.82);
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
-      z-index: 100;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 24px;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.25s ease;
-    }
-    .pwa-modal-overlay.active {
-      opacity: 1;
-      pointer-events: auto;
-    }
-    .pwa-modal-card {
-      background: rgba(15, 23, 42, 0.95);
-      border: 1px solid rgba(255, 255, 255, 0.25);
-      border-radius: 24px;
-      padding: 24px;
-      max-width: 320px;
-      width: 100%;
-      text-align: center;
-      box-shadow: 0 20px 40px rgba(0,0,0,0.85);
-    }
   </style>
 </head>
 <body>
-  <!-- Camera Viewfinder -->
+  <!-- Live Camera Viewfinder (Broadcaster) -->
   <video id="cameraView" autoplay playsinline muted></video>
 
   <!-- Tap-to-Focus Reticle Element -->
   <div class="focus-ring" id="focusRing"></div>
 
-  <!-- Top UI Overlay -->
-  <div class="ui-overlay">
+  <!-- Top UI Overlay (Broadcaster) -->
+  <div class="ui-overlay" id="broadcasterOverlay">
     <div class="top-header-box ui-interactive">
       <div class="top-header">
         <div class="status-badge liquid-glass">
@@ -529,7 +816,7 @@
   </div>
 
   <!-- Floating Liquid Glass Bottom Dock (Fixed with Safe Area) -->
-  <div class="bottom-dock liquid-glass">
+  <div class="bottom-dock liquid-glass" id="broadcasterDock">
     <!-- Flashlight / Torch Button -->
     <button class="btn-dock-tool" id="btnTorch" title="Flashlight">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -588,40 +875,186 @@
     <div style="font-size: 12px; margin-top: 6px; color: #64748b;">Screen power saved • Tap anywhere to wake</div>
   </div>
 
-  <!-- Exit / Disconnected Screen -->
-  <div class="exit-screen" id="exitScreen">
-    <div class="exit-card liquid-glass">
-      <div class="exit-icon-box">
-        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#f43f5e" stroke-width="2">
-          <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
-          <line x1="12" y1="2" x2="12" y2="12"></line>
-        </svg>
+  <!-- ─── Full-Screen Interactive QR Scanner Screen (Default on Root) ─── -->
+  <div class="scanner-screen" id="scannerScreen">
+    <video id="scannerVideo" autoplay playsinline muted></video>
+
+    <!-- Scanner Header -->
+    <div class="scanner-header">
+      <div class="scanner-brand liquid-glass">
+        <div class="scanner-brand-logo">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5">
+            <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"></path>
+            <circle cx="12" cy="13" r="3"></circle>
+          </svg>
+        </div>
+        <span class="scanner-brand-text">PhoneCam</span>
       </div>
-      <h2 style="font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 8px;">Camera Disconnected</h2>
-      <p style="font-size: 13px; color: #94a3b8; margin-bottom: 24px; line-height: 1.5;">Your camera stream has stopped and microphone is turned off.</p>
-      <button class="btn-rejoin" id="btnRejoin">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polygon points="23 7 16 12 23 17 23 7"></polygon>
-          <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <a href="/guide" class="liquid-glass" style="display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%; color: #38bdf8; text-decoration: none;" title="How to use guide">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+        </a>
+        <div class="status-badge liquid-glass">
+          <span class="status-dot connected"></span>
+          <span id="scannerStatus">Scan Desktop QR</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Center Reticle Frame -->
+    <div class="scanner-center-box">
+      <div class="scanner-frame">
+        <div class="scanner-corner tl"></div>
+        <div class="scanner-corner tr"></div>
+        <div class="scanner-corner bl"></div>
+        <div class="scanner-corner br"></div>
+        <div class="scanner-laser"></div>
+      </div>
+      <div class="scanner-tip-pill liquid-glass" id="scannerTipPill">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.2">
+          <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+          <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+          <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+          <rect x="3" y="14" width="7" height="7" rx="1"></rect>
         </svg>
-        <span>Reconnect Camera</span>
+        <span>Point camera at QR code on Desktop</span>
+      </div>
+    </div>
+
+    <!-- Bottom Scanner Controls -->
+    <div class="scanner-bottom-bar">
+      <div class="scanner-tool-row">
+        <button class="btn-scanner-circle" id="btnScannerTorch" title="Flashlight">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+        </button>
+        <button class="btn-scanner-circle" id="btnScannerFlip" title="Flip Camera">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 19H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"></path>
+            <path d="M13 5h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-5"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="m18 22-3-3 3-3"></path>
+            <path d="m6 2 3 3-3 3"></path>
+          </svg>
+        </button>
+      </div>
+
+      <button class="btn-manual-pill" id="btnOpenManualEntry">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+          <line x1="7" y1="8" x2="17" y2="8"></line>
+          <line x1="7" y1="12" x2="17" y2="12"></line>
+          <line x1="7" y1="16" x2="12" y2="16"></line>
+        </svg>
+        <span>Enter Session Code Manually</span>
       </button>
     </div>
   </div>
 
-  <!-- iOS PWA Install Guidance Modal -->
-  <div class="pwa-modal-overlay" id="pwaIosModal">
-    <div class="pwa-modal-card">
+  <!-- ─── Disconnect Confirmation Modal ─── -->
+  <div class="modal-overlay" id="disconnectConfirmModal">
+    <div class="modal-card liquid-glass">
+      <div class="modal-icon-badge warning">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2.2">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+          <line x1="12" y1="9" x2="12" y2="13"></line>
+          <line x1="12" y1="17" x2="12.01" y2="17"></line>
+        </svg>
+      </div>
+      <h3 class="modal-title">Disconnect Camera?</h3>
+      <p class="modal-desc">Are you sure you want to stop broadcasting? Your computer will lose the camera stream.</p>
+      <div class="modal-actions-row">
+        <button class="btn-modal-secondary" id="btnCancelDisconnect">Cancel</button>
+        <button class="btn-modal-danger" id="btnConfirmDisconnect">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+            <line x1="12" y1="2" x2="12" y2="12"></line>
+          </svg>
+          <span>Disconnect</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Disconnected / Exit Screen ─── -->
+  <div class="modal-overlay" id="exitScreen">
+    <div class="modal-card liquid-glass">
+      <div class="modal-icon-badge danger">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#f43f5e" stroke-width="2">
+          <path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+          <line x1="12" y1="2" x2="12" y2="12"></line>
+        </svg>
+      </div>
+      <h3 class="modal-title">Camera Disconnected</h3>
+      <p class="modal-desc">Your camera stream has stopped and microphone is turned off.</p>
+      <div class="modal-actions">
+        <!-- Reconnect current room -->
+        <button class="btn-modal-primary" id="btnRejoin">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="23 7 16 12 23 17 23 7"></polygon>
+            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+          </svg>
+          <span>Reconnect Camera</span>
+        </button>
+
+        <!-- Scan Another QR Code -->
+        <button class="btn-modal-secondary" id="btnScanAnotherQr" style="border-color: rgba(56, 189, 248, 0.4); color: #38bdf8;">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+            <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+            <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+            <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+          </svg>
+          <span>Scan Another QR Code</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Manual Session Entry Modal ─── -->
+  <div class="modal-overlay" id="manualEntryModal">
+    <div class="modal-card liquid-glass">
+      <div class="modal-icon-badge success">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
+          <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+          <line x1="7" y1="8" x2="17" y2="8"></line>
+          <line x1="7" y1="12" x2="17" y2="12"></line>
+          <line x1="7" y1="16" x2="12" y2="16"></line>
+        </svg>
+      </div>
+      <h3 class="modal-title">Enter Session Code</h3>
+      <p class="modal-desc">Type the 8-character code shown on your Desktop screen.</p>
+      
+      <div class="manual-input-box">
+        <input type="text" id="manualRoomInput" class="manual-input-field" placeholder="e.g. WGXW-BLJ3" maxlength="15" autocomplete="off" autocorrect="off" spellcheck="false" />
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-modal-primary" id="btnManualConnect">Connect to Desktop</button>
+        <button class="btn-modal-secondary" id="btnCloseManualEntry">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── iOS PWA Install Guidance Modal ─── -->
+  <div class="modal-overlay" id="pwaIosModal">
+    <div class="modal-card liquid-glass">
       <div style="font-size: 32px; margin-bottom: 12px;">📲</div>
-      <h3 style="font-size: 17px; font-weight: 700; color: #fff; margin-bottom: 8px;">Install PhoneCam</h3>
-      <p style="font-size: 13px; color: #94a3b8; line-height: 1.5; margin-bottom: 16px;">
+      <h3 class="modal-title">Install PhoneCam</h3>
+      <p class="modal-desc">
         To install as a full-screen app on iOS Safari:
         <br><br>
         1. Tap the <strong>Share</strong> button <span style="font-size: 16px; color: #38bdf8;">⎋</span> below
         <br>
         2. Tap <strong>Add to Home Screen</strong> <span style="font-size: 16px; color: #38bdf8;">⊞</span>
       </p>
-      <button class="btn-rejoin" style="width: 100%; justify-content: center; padding: 10px;" id="btnCloseIosModal">Got it</button>
+      <button class="btn-modal-primary" id="btnCloseIosModal">Got it</button>
     </div>
   </div>
 
@@ -670,42 +1103,47 @@
     window.addEventListener("beforeinstallprompt", (e) => {
       e.preventDefault();
       deferredPrompt = e;
-      if (!isStandalone) {
+      if (!isStandalone && btnInstallPwa) {
         btnInstallPwa.style.display = "inline-flex";
       }
     });
 
-    if (isIos && !isStandalone) {
+    if (isIos && !isStandalone && btnInstallPwa) {
       btnInstallPwa.style.display = "inline-flex";
     }
 
-    btnInstallPwa.addEventListener("click", async () => {
-      if (deferredPrompt) {
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        if (outcome === "accepted") {
-          btnInstallPwa.style.display = "none";
+    if (btnInstallPwa) {
+      btnInstallPwa.addEventListener("click", async () => {
+        if (deferredPrompt) {
+          deferredPrompt.prompt();
+          const { outcome } = await deferredPrompt.userChoice;
+          if (outcome === "accepted") {
+            btnInstallPwa.style.display = "none";
+          }
+          deferredPrompt = null;
+        } else if (isIos) {
+          pwaIosModal.classList.add("active");
+        } else {
+          alert("To install PhoneCam, tap the browser menu (⋮) and select 'Install app' or 'Add to Home screen'.");
         }
-        deferredPrompt = null;
-      } else if (isIos) {
-        pwaIosModal.classList.add("active");
-      } else {
-        alert("To install PhoneCam, tap the browser menu (⋮) and select 'Install app' or 'Add to Home screen'.");
-      }
-    });
+      });
+    }
 
-    btnCloseIosModal.addEventListener("click", () => {
-      pwaIosModal.classList.remove("active");
-    });
+    if (btnCloseIosModal) {
+      btnCloseIosModal.addEventListener("click", () => {
+        pwaIosModal.classList.remove("active");
+      });
+    }
 
     window.addEventListener("appinstalled", () => {
       console.log("[PWA] App successfully installed");
-      btnInstallPwa.style.display = "none";
+      if (btnInstallPwa) btnInstallPwa.style.display = "none";
     });
 
+    // ─── App Global State ─────────────────────────────────────
     const urlParams = new URLSearchParams(window.location.search);
-    const targetRoom = (urlParams.get("room") || "DEFAULT").toUpperCase();
-    const SERVER_URL = window.location.origin;
+    let targetRoom = (urlParams.get("room") || "").trim().toUpperCase();
+    let SERVER_URL = window.location.origin;
 
     const RTC_CONFIG = {
       iceServers: [
@@ -739,11 +1177,23 @@
     let isBroadcaster = true;
     let myDeviceName = "Phone Camera (" + (navigator.userAgent.includes("iPhone") ? "iOS" : "Android") + ")";
 
+    // Scanner State
+    let scannerStream = null;
+    let scannerScanInterval = null;
+    let scannerFacing = "environment";
+    let isScannerTorchOn = false;
+    let isScanningActive = false;
+
     const offscreenCanvas = document.createElement("canvas");
     const offscreenCtx = offscreenCanvas.getContext("2d");
 
-    // DOM Elements
+    const scannerCanvas = document.createElement("canvas");
+    const scannerCtx = scannerCanvas.getContext("2d", { willReadFrequently: true });
+
+    // DOM Elements - Broadcaster View
     const cameraView = document.getElementById("cameraView");
+    const broadcasterOverlay = document.getElementById("broadcasterOverlay");
+    const broadcasterDock = document.getElementById("broadcasterDock");
     const statusDot = document.getElementById("statusDot");
     const statusText = document.getElementById("statusText");
     const roomBadge = document.getElementById("roomBadge");
@@ -762,11 +1212,28 @@
     const telemetryMode = document.getElementById("telemetryMode");
     const telemetryPing = document.getElementById("telemetryPing");
 
-    roomBadge.textContent = "ROOM: " + targetRoom;
+    // DOM Elements - Modals & Scanner
+    const scannerScreen = document.getElementById("scannerScreen");
+    const scannerVideo = document.getElementById("scannerVideo");
+    const scannerStatus = document.getElementById("scannerStatus");
+    const scannerTipPill = document.getElementById("scannerTipPill");
+    const btnScannerTorch = document.getElementById("btnScannerTorch");
+    const btnScannerFlip = document.getElementById("btnScannerFlip");
+    const btnOpenManualEntry = document.getElementById("btnOpenManualEntry");
+    const disconnectConfirmModal = document.getElementById("disconnectConfirmModal");
+    const btnCancelDisconnect = document.getElementById("btnCancelDisconnect");
+    const btnConfirmDisconnect = document.getElementById("btnConfirmDisconnect");
+    const exitScreen = document.getElementById("exitScreen");
+    const btnRejoin = document.getElementById("btnRejoin");
+    const btnScanAnotherQr = document.getElementById("btnScanAnotherQr");
+    const manualEntryModal = document.getElementById("manualEntryModal");
+    const manualRoomInput = document.getElementById("manualRoomInput");
+    const btnManualConnect = document.getElementById("btnManualConnect");
+    const btnCloseManualEntry = document.getElementById("btnCloseManualEntry");
 
-    function haptic() {
+    function haptic(pattern = 15) {
       if (navigator.vibrate) {
-        navigator.vibrate(15);
+        try { navigator.vibrate(pattern); } catch(e) {}
       }
     }
 
@@ -792,8 +1259,30 @@
       }
     }
 
+    // ─── Modal & Disconnect Flow ──────────────────────────────
+    function showDisconnectConfirmation() {
+      haptic(20);
+      disconnectConfirmModal.classList.add("active");
+    }
+
+    function hideDisconnectConfirmation() {
+      disconnectConfirmModal.classList.remove("active");
+    }
+
+    btnDisconnectHeader.addEventListener("click", showDisconnectConfirmation);
+    btnExitBottom.addEventListener("click", showDisconnectConfirmation);
+    btnCancelDisconnect.addEventListener("click", () => {
+      haptic(10);
+      hideDisconnectConfirmation();
+    });
+
+    btnConfirmDisconnect.addEventListener("click", () => {
+      hideDisconnectConfirmation();
+      exitStream();
+    });
+
     function exitStream() {
-      haptic();
+      haptic([30, 40, 30]);
       if (frameInterval) {
         clearInterval(frameInterval);
         frameInterval = null;
@@ -803,7 +1292,10 @@
         peerConnection = null;
       }
       if (socket) {
-        socket.disconnect();
+        try {
+          socket.emit("stream-disconnect", { roomId: targetRoom });
+          socket.disconnect();
+        } catch(e) {}
       }
       if (localStream) {
         localStream.getTracks().forEach(t => t.stop());
@@ -812,7 +1304,6 @@
       if (cameraView) {
         cameraView.srcObject = null;
       }
-      const exitScreen = document.getElementById("exitScreen");
       if (exitScreen) {
         exitScreen.classList.add("active");
       }
@@ -821,23 +1312,29 @@
       }
     }
 
-    btnDisconnectHeader.addEventListener("click", exitStream);
-    btnExitBottom.addEventListener("click", exitStream);
+    // Reconnect to same room
+    btnRejoin.addEventListener("click", async () => {
+      haptic(20);
+      if (exitScreen) exitScreen.classList.remove("active");
+      if (!targetRoom) {
+        openScannerMode();
+        return;
+      }
+      await startBroadcasting(targetRoom);
+    });
 
-    const btnRejoin = document.getElementById("btnRejoin");
-    if (btnRejoin) {
-      btnRejoin.addEventListener("click", async () => {
-        haptic();
-        const exitScreen = document.getElementById("exitScreen");
-        if (exitScreen) exitScreen.classList.remove("active");
-        await initCamera(currentFacing);
-        connectSocket();
-      });
-    }
+    // Scan Another QR Code from Disconnected Screen
+    btnScanAnotherQr.addEventListener("click", () => {
+      haptic(20);
+      if (exitScreen) exitScreen.classList.remove("active");
+      targetRoom = "";
+      window.history.replaceState(null, "", window.location.pathname);
+      openScannerMode();
+    });
 
-    // Tap to focus animation
+    // ─── Tap to Focus Animation ───────────────────────────────
     window.addEventListener("click", (e) => {
-      if (e.target.closest("button") || e.target.closest(".bottom-dock") || e.target.closest(".ui-interactive")) return;
+      if (e.target.closest("button") || e.target.closest(".bottom-dock") || e.target.closest(".ui-interactive") || e.target.closest(".modal-overlay") || e.target.closest(".scanner-screen")) return;
       if (focusRing) {
         focusRing.style.left = e.clientX + "px";
         focusRing.style.top = e.clientY + "px";
@@ -846,7 +1343,7 @@
       }
     });
 
-    // Fallback frame streaming
+    // ─── Fallback Frame Streaming ─────────────────────────────
     function startFrameStreaming() {
       if (frameInterval) clearInterval(frameInterval);
       frameInterval = setInterval(() => {
@@ -884,7 +1381,7 @@
       } catch (e) {}
     }
 
-    // Start Camera & High Quality Audio
+    // ─── Start Camera for Broadcaster ─────────────────────────
     async function initCamera(facingMode = currentFacing, specificDeviceId = null) {
       if (localStream) {
         localStream.getTracks().forEach(t => t.stop());
@@ -898,7 +1395,6 @@
 
       let stream = null;
 
-      // 1. If explicit deviceId is provided
       if (specificDeviceId) {
         try {
           stream = await navigator.mediaDevices.getUserMedia({
@@ -908,7 +1404,6 @@
         } catch (e) {}
       }
 
-      // 2. Try exact facingMode ("user" for front selfie, "environment" for back)
       if (!stream) {
         try {
           stream = await navigator.mediaDevices.getUserMedia({
@@ -916,7 +1411,6 @@
             audio: audioConstraints
           });
         } catch (e) {
-          // 3. Fallback to ideal facingMode
           try {
             stream = await navigator.mediaDevices.getUserMedia({
               video: { facingMode: facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
@@ -964,7 +1458,7 @@
       }
     }
 
-    // Toggle Torch
+    // Toggle Torch for Stream
     async function toggleTorch() {
       haptic();
       if (!localStream) return;
@@ -980,7 +1474,7 @@
       }
     }
 
-    // WebRTC Offer
+    // ─── WebRTC Offer ─────────────────────────────────────────
     async function startWebRTCStream() {
       if (!targetRoom || !socket || !socket.connected) return;
 
@@ -1048,7 +1542,7 @@
       }
     }
 
-    // Connect Socket.IO
+    // ─── Socket.IO Connection ─────────────────────────────────
     function connectSocket() {
       setStatus("Connecting to server...");
 
@@ -1131,7 +1625,228 @@
       });
     }
 
-    // Takeover Button
+    // ─── QR Code Scanner Implementation ───────────────────────
+    async function openScannerMode() {
+      // Clean up previous stream
+      if (localStream) {
+        localStream.getTracks().forEach(t => t.stop());
+        localStream = null;
+      }
+      if (socket) {
+        socket.disconnect();
+      }
+
+      scannerScreen.classList.add("active");
+      broadcasterOverlay.style.display = "none";
+      broadcasterDock.style.display = "none";
+      isScanningActive = true;
+
+      await startScannerCamera(scannerFacing);
+      startQrDetectLoop();
+    }
+
+    async function startScannerCamera(facing = "environment") {
+      if (scannerStream) {
+        scannerStream.getTracks().forEach(t => t.stop());
+        scannerStream = null;
+      }
+
+      try {
+        scannerStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false
+        });
+        scannerVideo.srcObject = scannerStream;
+        scannerFacing = facing;
+        await scannerVideo.play().catch(() => {});
+
+        try {
+          const videoTrack = scannerStream.getVideoTracks()[0];
+          const capabilities = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
+          btnScannerTorch.style.display = capabilities.torch ? "flex" : "none";
+        } catch (e) {}
+      } catch (err) {
+        console.warn("Scanner camera init failed:", err);
+        if (scannerStatus) scannerStatus.textContent = "Camera Error";
+      }
+    }
+
+    function stopScannerCamera() {
+      isScanningActive = false;
+      if (scannerScanInterval) {
+        clearInterval(scannerScanInterval);
+        scannerScanInterval = null;
+      }
+      if (scannerStream) {
+        scannerStream.getTracks().forEach(t => t.stop());
+        scannerStream = null;
+      }
+      if (scannerVideo) {
+        scannerVideo.srcObject = null;
+      }
+      scannerScreen.classList.remove("active");
+    }
+
+    function handleDecodedQr(qrText) {
+      if (!isScanningActive || !qrText) return;
+      haptic([40, 50, 40]);
+
+      let extractedRoom = "";
+      try {
+        if (qrText.includes("room=")) {
+          const parsedUrl = new URL(qrText);
+          extractedRoom = parsedUrl.searchParams.get("room") || "";
+          if (parsedUrl.origin && parsedUrl.origin !== "null" && !parsedUrl.origin.includes("qrserver.com")) {
+            SERVER_URL = parsedUrl.origin;
+          }
+        } else if (qrText.startsWith("{")) {
+          const parsedJson = JSON.parse(qrText);
+          extractedRoom = parsedJson.roomId || parsedJson.room || "";
+          if (parsedJson.serverUrl) {
+            SERVER_URL = parsedJson.serverUrl;
+          }
+        } else {
+          extractedRoom = qrText.trim();
+        }
+      } catch (e) {
+        extractedRoom = qrText.trim();
+      }
+
+      extractedRoom = extractedRoom.replace(/[^A-Za-z0-9_-]/g, "").toUpperCase();
+
+      if (extractedRoom.length >= 2) {
+        isScanningActive = false;
+        if (scannerTipPill) {
+          scannerTipPill.innerHTML = `<span>Connecting to <strong>${extractedRoom}</strong>...</span>`;
+        }
+        setTimeout(() => {
+          stopScannerCamera();
+          startBroadcasting(extractedRoom);
+        }, 300);
+      }
+    }
+
+    function startQrDetectLoop() {
+      if (scannerScanInterval) clearInterval(scannerScanInterval);
+
+      let barcodeDetector = null;
+      if ("BarcodeDetector" in window) {
+        try {
+          barcodeDetector = new BarcodeDetector({ formats: ["qr_code"] });
+        } catch (e) {}
+      }
+
+      scannerScanInterval = setInterval(async () => {
+        if (!isScanningActive || !scannerVideo || scannerVideo.readyState < 2) return;
+
+        // 1. Try Native BarcodeDetector (High performance hardware acceleration)
+        if (barcodeDetector) {
+          try {
+            const barcodes = await barcodeDetector.detect(scannerVideo);
+            if (barcodes && barcodes.length > 0 && barcodes[0].rawValue) {
+              handleDecodedQr(barcodes[0].rawValue);
+              return;
+            }
+          } catch (e) {}
+        }
+
+        // 2. Universal jsQR fallback (Canvas scan)
+        if (window.jsQR) {
+          try {
+            const vw = scannerVideo.videoWidth;
+            const vh = scannerVideo.videoHeight;
+            if (vw > 0 && vh > 0) {
+              const scanWidth = Math.min(vw, 480);
+              const scanHeight = Math.round((scanWidth * vh) / vw);
+              if (scannerCanvas.width !== scanWidth || scannerCanvas.height !== scanHeight) {
+                scannerCanvas.width = scanWidth;
+                scannerCanvas.height = scanHeight;
+              }
+              scannerCtx.drawImage(scannerVideo, 0, 0, scanWidth, scanHeight);
+              const imgData = scannerCtx.getImageData(0, 0, scanWidth, scanHeight);
+              const code = jsQR(imgData.data, imgData.width, imgData.height, {
+                inversionAttempts: "dontInvert"
+              });
+              if (code && code.data) {
+                handleDecodedQr(code.data);
+              }
+            }
+          } catch (e) {}
+        }
+      }, 120);
+    }
+
+    // Scanner Flip Camera
+    btnScannerFlip.addEventListener("click", async () => {
+      haptic(15);
+      const nextFacing = (scannerFacing === "environment") ? "user" : "environment";
+      isScannerTorchOn = false;
+      btnScannerTorch.classList.remove("active");
+      await startScannerCamera(nextFacing);
+    });
+
+    // Scanner Torch Toggle
+    btnScannerTorch.addEventListener("click", async () => {
+      haptic(15);
+      if (!scannerStream) return;
+      const videoTrack = scannerStream.getVideoTracks()[0];
+      try {
+        isScannerTorchOn = !isScannerTorchOn;
+        await videoTrack.applyConstraints({
+          advanced: [{ torch: isScannerTorchOn }]
+        });
+        btnScannerTorch.classList.toggle("active", isScannerTorchOn);
+      } catch (e) {}
+    });
+
+    // Manual Entry Drawer
+    btnOpenManualEntry.addEventListener("click", () => {
+      haptic(15);
+      manualEntryModal.classList.add("active");
+      setTimeout(() => manualRoomInput.focus(), 150);
+    });
+
+    btnCloseManualEntry.addEventListener("click", () => {
+      haptic(10);
+      manualEntryModal.classList.remove("active");
+    });
+
+    btnManualConnect.addEventListener("click", () => {
+      const enteredCode = manualRoomInput.value.trim().toUpperCase();
+      if (!enteredCode) {
+        manualRoomInput.focus();
+        return;
+      }
+      haptic(20);
+      manualEntryModal.classList.remove("active");
+      stopScannerCamera();
+      startBroadcasting(enteredCode);
+    });
+
+    manualRoomInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        btnManualConnect.click();
+      }
+    });
+
+    // ─── Start Broadcasting Flow ──────────────────────────────
+    async function startBroadcasting(roomId) {
+      targetRoom = roomId.toUpperCase();
+      roomBadge.textContent = "ROOM: " + targetRoom;
+      window.history.replaceState(null, "", "?room=" + encodeURIComponent(targetRoom));
+
+      scannerScreen.classList.remove("active");
+      exitScreen.classList.remove("active");
+      disconnectConfirmModal.classList.remove("active");
+      broadcasterOverlay.style.display = "flex";
+      broadcasterDock.style.display = "flex";
+
+      await initCamera(currentFacing);
+      connectSocket();
+      requestWakeLock();
+    }
+
+    // ─── Broadcaster Controls ─────────────────────────────────
     btnTakeover.addEventListener("click", () => {
       haptic();
       if (socket && socket.connected && targetRoom) {
@@ -1143,7 +1858,6 @@
       }
     });
 
-    // Flip Camera Button (Front / Back Selfie)
     btnFlip.addEventListener("click", async () => {
       haptic();
       btnFlip.style.transform = "rotate(180deg) scale(0.9)";
@@ -1180,7 +1894,6 @@
 
     btnTorch.addEventListener("click", toggleTorch);
 
-    // Mute Microphone Button
     btnMute.addEventListener("click", () => {
       haptic();
       if (!localStream) return;
@@ -1196,7 +1909,6 @@
       }
     });
 
-    // OLED Dimmer Button
     btnDimmer.addEventListener("click", () => {
       haptic();
       dimmerOverlay.classList.add("active");
@@ -1206,11 +1918,15 @@
       dimmerOverlay.classList.remove("active");
     });
 
-    // Auto-init
+    // ─── Initialization Logic ─────────────────────────────────
     (async function init() {
-      await initCamera("environment");
-      connectSocket();
-      requestWakeLock();
+      if (targetRoom && targetRoom !== "DEFAULT") {
+        // Direct link with room param -> auto-broadcast
+        await startBroadcasting(targetRoom);
+      } else {
+        // Root page without room param -> open QR scanner by default
+        openScannerMode();
+      }
     })();
   </script>
 </body>

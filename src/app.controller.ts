@@ -24,6 +24,24 @@ export class AppController {
     return res.type("text/html").send("<h1>PhoneCam Mobile Broadcaster</h1>");
   }
 
+  @Get(["guide", "help", "how-to-use", "instructions"])
+  getGuidePage(@Res() res: Response) {
+    const candidatePaths = [
+      path.join(__dirname, "..", "public", "guide.html"),
+      path.join(__dirname, "..", "..", "public", "guide.html"),
+      path.join(process.cwd(), "public", "guide.html"),
+      path.join(process.cwd(), "backend", "public", "guide.html"),
+    ];
+
+    for (const p of candidatePaths) {
+      if (fs.existsSync(p)) {
+        return res.sendFile(path.resolve(p));
+      }
+    }
+
+    return res.redirect("/");
+  }
+
   @Get("health")
   getHealth() {
     return { status: "ok", timestamp: new Date().toISOString() };
